@@ -1,0 +1,6 @@
+{
+  "use_habana_mixed_precision": false,
+  "hmp_is_verbose": false,
+  "use_fused_adam": false,
+  "use_fused_clip_norm": false
+}

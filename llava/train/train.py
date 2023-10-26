@@ -25,6 +25,7 @@ from typing import Dict, Optional, Sequence, List
 import torch
 
 import transformers
+import optimum
 
 from llava.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 from torch.utils.data import Dataset
@@ -72,7 +73,7 @@ class DataArguments:
 
 
 @dataclass
-class TrainingArguments(transformers.TrainingArguments):
+class TrainingArguments(optimum.habana.GaudiTrainingArguments):
     cache_dir: Optional[str] = field(default=None)
     optim: str = field(default="adamw_torch")
     remove_unused_columns: bool = field(default=False)
@@ -176,7 +177,7 @@ def find_all_linear_names(model):
     return list(lora_module_names)
 
 
-def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
+def safe_save_model_for_hf_trainer(trainer: optimum.habana.GaudiTrainer,
                                    output_dir: str):
     """Collects the state dict and dump to disk."""
 
@@ -396,7 +397,8 @@ def preprocess_llama_2(
                 target[:] = IGNORE_INDEX
                 print(
                     f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
-                    f" (ignored)"
+                    f"has_image: {has_image} (ignored)"
+                    f"{target}"
                 )
 
     return dict(
@@ -450,7 +452,7 @@ def preprocess_v1(
         total_len = int(target.ne(tokenizer.pad_token_id).sum())
 
         rounds = conversation.split(conv.sep2)
-        cur_len = 1
+        cur_len = 1 + 1  # 1 for bos, and 1 for compensating in the first round
         target[:cur_len] = IGNORE_INDEX
         for i, rou in enumerate(rounds):
             if rou == "":
@@ -462,24 +464,32 @@ def preprocess_v1(
             parts[0] += sep
 
             if has_image:
-                round_len = len(tokenizer_image_token(rou, tokenizer))
+                round_len = len(tokenizer_image_token(rou, tokenizer)) - 2 + 1  # -2 for the extra tokens in tokenizing "USER", +1 for the missing "</s>"
                 instruction_len = len(tokenizer_image_token(parts[0], tokenizer)) - 2
             else:
-                round_len = len(tokenizer(rou).input_ids)
+                round_len = len(tokenizer(rou).input_ids) - 2 + 1
                 instruction_len = len(tokenizer(parts[0]).input_ids) - 2
 
             target[cur_len : cur_len + instruction_len] = IGNORE_INDEX
+
+            # print(tokenizer.decode(target[cur_len : cur_len + instruction_len]))
 
             cur_len += round_len
         target[cur_len:] = IGNORE_INDEX
 
         if cur_len < tokenizer.model_max_length:
             if cur_len != total_len:
+                # print(target)
                 target[:] = IGNORE_INDEX
                 print(
                     f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
-                    f" (ignored)"
+                    f"has_image: {has_image} (ignored)"
                 )
+                # print(roles, conv.roles)
+                # print(source[0])
+                # print(rounds)
+                # assert False
+        assert (target != IGNORE_INDEX).any()
 
     return dict(
         input_ids=input_ids,
@@ -919,6 +929,9 @@ def train():
 
     data_module = make_supervised_data_module(tokenizer=tokenizer,
                                               data_args=data_args)
+
+    model.to('hpu')
+    model.to(torch.bfloat16)
     trainer = LLaVATrainer(model=model,
                     tokenizer=tokenizer,
                     args=training_args,

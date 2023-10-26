@@ -3,7 +3,8 @@ import torch
 
 from torch.utils.data import Sampler
 
-from transformers import Trainer
+# from transformers import Trainer
+from optimum.habana import GaudiTrainer as Trainer
 from transformers.trainer import (
     has_length,
 )
