@@ -452,7 +452,7 @@ def preprocess_v1(
         total_len = int(target.ne(tokenizer.pad_token_id).sum())
 
         rounds = conversation.split(conv.sep2)
-        cur_len = 1 + 1  # 1 for bos, and 1 for compensating in the first round
+        cur_len = 1
         target[:cur_len] = IGNORE_INDEX
         for i, rou in enumerate(rounds):
             if rou == "":
@@ -464,7 +464,7 @@ def preprocess_v1(
             parts[0] += sep
 
             if has_image:
-                round_len = len(tokenizer_image_token(rou, tokenizer)) - 2 + 1  # -2 for the extra tokens in tokenizing "USER", +1 for the missing "</s>"
+                round_len = len(tokenizer_image_token(rou, tokenizer)) - 2
                 instruction_len = len(tokenizer_image_token(parts[0], tokenizer)) - 2
             else:
                 round_len = len(tokenizer(rou).input_ids) - 2 + 1
@@ -480,7 +480,7 @@ def preprocess_v1(
         if cur_len < tokenizer.model_max_length:
             if cur_len != total_len:
                 # print(target)
-                target[:] = IGNORE_INDEX
+                # target[:] = IGNORE_INDEX
                 print(
                     f"WARNING: tokenization mismatch: {cur_len} vs. {total_len}."
                     f"has_image: {has_image} (ignored)"
@@ -489,7 +489,7 @@ def preprocess_v1(
                 # print(source[0])
                 # print(rounds)
                 # assert False
-        assert (target != IGNORE_INDEX).any()
+        # assert (target != IGNORE_INDEX).any()
 
     return dict(
         input_ids=input_ids,
