@@ -464,10 +464,10 @@ def preprocess_v1(
             parts[0] += sep
 
             if has_image:
-                round_len = len(tokenizer_image_token(rou, tokenizer)) - 2
+                round_len = len(tokenizer_image_token(rou, tokenizer))
                 instruction_len = len(tokenizer_image_token(parts[0], tokenizer)) - 2
             else:
-                round_len = len(tokenizer(rou).input_ids) - 2 + 1
+                round_len = len(tokenizer(rou).input_ids)
                 instruction_len = len(tokenizer(parts[0]).input_ids) - 2
 
             target[cur_len : cur_len + instruction_len] = IGNORE_INDEX
@@ -913,6 +913,8 @@ def train():
         training_args.use_im_start_end = model_args.mm_use_im_start_end
         model.config.mm_use_im_patch_token = model_args.mm_use_im_patch_token
         model.initialize_vision_tokenizer(model_args, tokenizer=tokenizer)
+
+        model.get_vision_tower().requires_grad_(False)
 
     if training_args.bits in [4, 8]:
         from peft.tuners.lora import LoraLayer
