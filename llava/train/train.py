@@ -25,6 +25,7 @@ from typing import Dict, Optional, Sequence, List
 import torch
 
 import transformers
+import optimum
 
 from llava.constants import IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 from torch.utils.data import Dataset
@@ -71,7 +72,7 @@ class DataArguments:
 
 
 @dataclass
-class TrainingArguments(transformers.TrainingArguments):
+class TrainingArguments(optimum.habana.GaudiTrainingArguments):
     cache_dir: Optional[str] = field(default=None)
     optim: str = field(default="adamw_torch")
     remove_unused_columns: bool = field(default=False)
@@ -176,7 +177,7 @@ def find_all_linear_names(model):
     return list(lora_module_names)
 
 
-def safe_save_model_for_hf_trainer(trainer: transformers.Trainer,
+def safe_save_model_for_hf_trainer(trainer: optimum.habana.GaudiTrainer,
                                    output_dir: str):
     """Collects the state dict and dump to disk."""
 
@@ -666,6 +667,11 @@ class LazySupervisedDataset(Dataset):
             image_file = self.list_data_dict[i]['image']
             image_folder = self.data_args.image_folder
             processor = self.data_args.image_processor
+            if not os.path.exists(os.path.join(image_folder, image_file)):
+                image_file = image_file[:-(len('.jpg'))] + '.gif'
+            if not os.path.exists(os.path.join(image_folder, image_file)):
+                image_file = image_file[:-(len('.gif'))] + '.png'
+            image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
             image = Image.open(os.path.join(image_folder, image_file)).convert('RGB')
             if self.data_args.image_aspect_ratio == 'pad':
                 def expand2square(pil_img, background_color):
@@ -852,7 +858,7 @@ def train():
             cache_dir=training_args.cache_dir,
             model_max_length=training_args.model_max_length,
             padding_side="right",
-            use_fast=False,
+            use_fast=True,
         )
 
     if model_args.version == "v0":
@@ -906,7 +912,7 @@ def train():
         training_args.use_im_start_end = model_args.mm_use_im_start_end
         model.config.mm_use_im_patch_token = model_args.mm_use_im_patch_token
         model.initialize_vision_tokenizer(model_args, tokenizer=tokenizer)
-
+    print(type(model.model))
     if training_args.bits in [4, 8]:
         from peft.tuners.lora import LoraLayer
         for name, module in model.named_modules():

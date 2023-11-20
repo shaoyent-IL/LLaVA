@@ -25,6 +25,8 @@ from transformers.modeling_outputs import CausalLMOutputWithPast
 
 from ..llava_arch import LlavaMetaModel, LlavaMetaForCausalLM
 
+import habana_frameworks.torch.core as htcore
+
 
 class LlavaConfig(LlamaConfig):
     model_type = "llava"
@@ -49,6 +51,10 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
 
         # Initialize weights and apply final processing
         self.post_init()
+
+        # htcore.hpu.ModuleCacher(max_graphs=10)(model=self.model.layers, inplace=True)
+        # h = torch.randn(16, 128, device='hpu')
+        # self.model.layers = torch.hpu.make_graphed_callables(self.model.layers, (h,))
 
     def get_model(self):
         return self.model
